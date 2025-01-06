@@ -1,12 +1,21 @@
 
 # Load dataset
-@st.cache
+@st.cache(allow_output_mutation=True)
 def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
     data = pd.read_csv(csv_url)
     return data
 
 data = load_data_from_drive()
+
+# Pastikan kolom yang diperlukan ada di dataset
+required_columns = ['Country', 'Region', 'Cluster', 'Total score', 'Talent', 
+                    'Infrastructure', 'Income group', 'Political regime']
+
+missing_columns = [col for col in required_columns if col not in data.columns]
+if missing_columns:
+    st.error(f"Kolom berikut tidak ditemukan dalam dataset: {', '.join(missing_columns)}")
+    st.stop()
 
 # Sidebar untuk filter dan informasi
 st.sidebar.title("Dashboard Visualisasi AI Global Index")
@@ -23,52 +32,58 @@ options = st.selectbox(
 # Filter data awal (gunakan seluruh data terlebih dahulu)
 filtered_data = data.copy()
 
-# Filter cluster hanya jika diperlukan
 if options == "Distribusi Total Score":
     st.subheader("Total Score per Country Berdasarkan Region dan Cluster")
     
     # Filter region
     region_filter = st.multiselect("Pilih Region:", data['Region'].unique(), default=data['Region'].unique())
-    filtered_data = data[data['Region'].isin(region_filter)]
+    filtered_data = filtered_data[filtered_data['Region'].isin(region_filter)]
     
     # Filter rentang total score
-    score_range = st.slider("Pilih Rentang Total Score:",
-                            min_value=int(data['Total score'].min()),
-                            max_value=int(data['Total score'].max()),
-                            value=(int(data['Total score'].min()), int(data['Total score'].max())))
-    filtered_data = filtered_data[(filtered_data['Total score'] >= score_range[0]) & 
-                                  (filtered_data['Total score'] <= score_range[1])]
+    if not filtered_data.empty:
+        score_range = st.slider(
+            "Pilih Rentang Total Score:",
+            min_value=int(filtered_data['Total score'].min()),
+            max_value=int(filtered_data['Total score'].max()),
+            value=(int(filtered_data['Total score'].min()), int(filtered_data['Total score'].max()))
+        )
+        filtered_data = filtered_data[(filtered_data['Total score'] >= score_range[0]) & 
+                                      (filtered_data['Total score'] <= score_range[1])]
+    else:
+        st.warning("Data tidak ditemukan untuk filter yang dipilih.")
     
     # Filter cluster
     cluster_filter = st.multiselect("Pilih Cluster:", data['Cluster'].unique(), default=data['Cluster'].unique())
     filtered_data = filtered_data[filtered_data['Cluster'].isin(cluster_filter)]
     
     # Loop untuk membuat diagram batang per region dan cluster
-    for region in filtered_data['Region'].unique():
-        region_data = filtered_data[filtered_data['Region'] == region]
-        
-        fig = px.bar(
-            region_data, 
-            x='Country', 
-            y='Total score', 
-            color='Cluster',  # Menambahkan warna berdasarkan cluster
-            title=f'Total Score untuk Region: {region}',
-            labels={'Total score': 'Total Score', 'Country': 'Country'},
-            text='Total score',  # Menampilkan nilai pada batang
-            color_discrete_sequence=px.colors.qualitative.Set2
-        )
-        
-        # Menambahkan teks dan memiringkan label Country untuk lebih rapi
-        fig.update_traces(textposition='outside')
-        fig.update_layout(
-            xaxis_tickangle=-45,  # Memiringkan nama negara untuk lebih rapi
-            width=1000,           # Lebar diagram
-            height=600            # Tinggi diagram
-        )
-        
-        # Menampilkan diagram untuk region tertentu
-        st.plotly_chart(fig)
-
+    if not filtered_data.empty:
+        for region in filtered_data['Region'].unique():
+            region_data = filtered_data[filtered_data['Region'] == region]
+            
+            fig = px.bar(
+                region_data, 
+                x='Country', 
+                y='Total score', 
+                color='Cluster',  # Menambahkan warna berdasarkan cluster
+                title=f'Total Score untuk Region: {region}',
+                labels={'Total score': 'Total Score', 'Country': 'Country'},
+                text='Total score',  # Menampilkan nilai pada batang
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            
+            # Menambahkan teks dan memiringkan label Country untuk lebih rapi
+            fig.update_traces(textposition='outside')
+            fig.update_layout(
+                xaxis_tickangle=-45,  # Memiringkan nama negara untuk lebih rapi
+                width=1000,           # Lebar diagram
+                height=600            # Tinggi diagram
+            )
+            
+            # Menampilkan diagram untuk region tertentu
+            st.plotly_chart(fig)
+    else:
+        st.warning("Tidak ada data untuk visualisasi ini.")
 
 elif options == "Scatter Plot":
     st.subheader("Hubungan Talent dan Infrastructure Berdasarkan Income Group")
@@ -99,7 +114,6 @@ elif options == "Peta Geografis":
         color_continuous_scale=px.colors.sequential.Plasma
     )
     st.plotly_chart(fig)
-
 
 elif options == "Box Plot":
     st.subheader("Box Plot Berdasarkan Cluster")
