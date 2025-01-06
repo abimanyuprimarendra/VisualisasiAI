@@ -1,8 +1,8 @@
 
 # Load dataset
-@st.cache_data
+@st.cache
 def load_data_from_drive():
-    csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"  # Ganti dengan ID file Anda
+    csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
     data = pd.read_csv(csv_url)
     return data
 
