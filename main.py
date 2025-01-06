@@ -1,6 +1,3 @@
-import streamlit as st
-import plotly.express as px
-import pandas as pd
 
 # Load dataset
 @st.cache_data
