@@ -1,6 +1,9 @@
+import streamlit as st
+import plotly.express as px
+import pandas as pd
 
 # Load dataset
-@st.cache(allow_output_mutation=True)
+@st.cache_data
 def load_data_from_drive():
     csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
     data = pd.read_csv(csv_url)
