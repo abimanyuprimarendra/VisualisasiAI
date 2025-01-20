@@ -20,7 +20,7 @@ if missing_columns:
     st.error(f"Kolom berikut tidak ditemukan dalam dataset: {', '.join(missing_columns)}")
     st.stop()
     
-st.title("Global AI Index Visualization Dashboard")
+st.set_page_config(page_title="Visualisasi AI")
 
 # Sidebar untuk filter dan informasi
 st.sidebar.title("Dashboard Visualisasi AI Global Index")
