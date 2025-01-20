@@ -19,6 +19,8 @@ missing_columns = [col for col in required_columns if col not in data.columns]
 if missing_columns:
     st.error(f"Kolom berikut tidak ditemukan dalam dataset: {', '.join(missing_columns)}")
     st.stop()
+    
+st.title("Global AI Index Visualization Dashboard")
 
 # Sidebar untuk filter dan informasi
 st.sidebar.title("Dashboard Visualisasi AI Global Index")
