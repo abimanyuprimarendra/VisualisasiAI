@@ -1,95 +1,153 @@
 import streamlit as st
+import plotly.express as px
 import pandas as pd
-import time
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.neighbors import NearestNeighbors
 
+# Load dataset
 @st.cache_data
 def load_data_from_drive():
-    csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-"
+    csv_url = "https://drive.google.com/uc?id=1lto09pdlh825Gv0TfBUkgk1e2JVQW19c"
     data = pd.read_csv(csv_url)
-    data['listed_in'] = data['listed_in'].fillna('')
-    if 'description' in data.columns:
-        data['description'] = data['description'].fillna('')
-    else:
-        data['description'] = ''
-    data['combined'] = data['title'] + " " + data['listed_in'] + " " + data['description']
     return data
 
-@st.cache_data(show_spinner=False)
-def create_tfidf_matrix(df):
-    tfidf = TfidfVectorizer(stop_words='english')
-    tfidf_matrix = tfidf.fit_transform(df['combined'])
-    return tfidf_matrix
+data = load_data_from_drive()
 
-@st.cache_data(show_spinner=False)
-def create_knn_model(tfidf_matrix):
-    knn_model = NearestNeighbors(metric='cosine', algorithm='brute')
-    knn_model.fit(tfidf_matrix)
-    return knn_model
+# Pastikan kolom yang diperlukan ada di dataset
+required_columns = ['Country', 'Region', 'Cluster', 'Total score', 'Talent', 
+                    'Infrastructure', 'Income group', 'Political regime']
 
-def get_content_based_recommendations_with_scores(title, cosine_sim, df):
-    if title not in df['title'].values:
-        return "Judul tidak ditemukan di dataset."
-    idx = df[df['title'] == title].index[0]
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:11]
-    recommended = [(df['title'].iloc[i], score) for i, score in sim_scores]
-    return recommended
+missing_columns = [col for col in required_columns if col not in data.columns]
+if missing_columns:
+    st.error(f"Kolom berikut tidak ditemukan dalam dataset: {', '.join(missing_columns)}")
+    st.stop()
+    
+st.set_page_config(page_title="Visualisasi AI")
 
-def get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix, n_neighbors=10):
-    if title not in df['title'].values:
-        return "Judul tidak ditemukan di dataset."
-    idx = df[df['title'] == title].index[0]
-    item_vector = tfidf_matrix[idx]
-    distances, indices_knn = knn_model.kneighbors(item_vector, n_neighbors=n_neighbors + 1)
-    recommended_indices = indices_knn.flatten()[1:]
-    distances = distances.flatten()[1:]
-    recommended = [(df['title'].iloc[i], 1 - dist) for i, dist in zip(recommended_indices, distances)]
-    return recommended
+# Sidebar untuk filter dan informasi
+st.sidebar.title("Dashboard Visualisasi AI Global Index")
+st.sidebar.metric("Jumlah Negara", data['Country'].nunique())
+st.sidebar.metric("Jumlah Cluster", data['Cluster'].nunique())
 
-def measure_avg_time(func, title, runs=10):
-    times = []
-    for _ in range(runs):
-        start = time.time()
-        func(title)
-        end = time.time()
-        times.append(end - start)
-    avg_time = sum(times) / runs
-    return avg_time
+# Pilihan Visualisasi
+options = st.selectbox(
+    "Pilih Visualisasi:",
+    ["Distribusi Total Score", "Scatter Plot", "Peta Geografis", 
+     "Box Plot", "Pie Chart", "Bubble Chart"]
+)
 
-st.title("Sistem Rekomendasi Film Netflix")
+# Filter data awal (gunakan seluruh data terlebih dahulu)
+filtered_data = data.copy()
 
-# Load data dari Google Drive
-df = load_data_from_drive()
-
-# Buat matrix TF-IDF dan model KNN
-tfidf_matrix = create_tfidf_matrix(df)
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
-knn_model = create_knn_model(tfidf_matrix)
-
-title = st.text_input("Masukkan judul film untuk direkomendasikan:")
-
-if title:
-    if title not in df['title'].values:
-        st.warning("Judul film tidak ditemukan di dataset. Coba input judul lain.")
+if options == "Distribusi Total Score":
+    st.subheader("Total Score per Country Berdasarkan Region dan Cluster")
+    
+    # Filter region
+    region_filter = st.multiselect("Pilih Region:", data['Region'].unique(), default=data['Region'].unique())
+    filtered_data = filtered_data[filtered_data['Region'].isin(region_filter)]
+    
+    # Filter rentang total score
+    if not filtered_data.empty:
+        score_range = st.slider(
+            "Pilih Rentang Total Score:",
+            min_value=int(filtered_data['Total score'].min()),
+            max_value=int(filtered_data['Total score'].max()),
+            value=(int(filtered_data['Total score'].min()), int(filtered_data['Total score'].max()))
+        )
+        filtered_data = filtered_data[(filtered_data['Total score'] >= score_range[0]) & 
+                                      (filtered_data['Total score'] <= score_range[1])]
     else:
-        with st.spinner("Menghitung rekomendasi..."):
-            avg_time_cosine = measure_avg_time(lambda t=title: get_content_based_recommendations_with_scores(t, cosine_sim, df), title)
-            avg_time_knn = measure_avg_time(lambda t=title: get_knn_recommendations_with_scores(t, knn_model, df, tfidf_matrix), title)
+        st.warning("Data tidak ditemukan untuk filter yang dipilih.")
+    
+    # Filter cluster
+    cluster_filter = st.multiselect("Pilih Cluster:", data['Cluster'].unique(), default=data['Cluster'].unique())
+    filtered_data = filtered_data[filtered_data['Cluster'].isin(cluster_filter)]
+    
+    # Loop untuk membuat diagram batang per region dan cluster
+    if not filtered_data.empty:
+        for region in filtered_data['Region'].unique():
+            region_data = filtered_data[filtered_data['Region'] == region]
+            
+            fig = px.bar(
+                region_data, 
+                x='Country', 
+                y='Total score', 
+                color='Cluster',  # Menambahkan warna berdasarkan cluster
+                title=f'Total Score untuk Region: {region}',
+                labels={'Total score': 'Total Score', 'Country': 'Country'},
+                text='Total score',  # Menampilkan nilai pada batang
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            
+            # Menambahkan teks dan memiringkan label Country untuk lebih rapi
+            fig.update_traces(textposition='outside')
+            fig.update_layout(
+                xaxis_tickangle=-45,  # Memiringkan nama negara untuk lebih rapi
+                width=1000,           # Lebar diagram
+                height=600            # Tinggi diagram
+            )
+            
+            # Menampilkan diagram untuk region tertentu
+            st.plotly_chart(fig)
+    else:
+        st.warning("Tidak ada data untuk visualisasi ini.")
 
-            st.write(f"Rata-rata waktu eksekusi Cosine Similarity: **{avg_time_cosine:.5f} detik**")
-            st.write(f"Rata-rata waktu eksekusi KNN: **{avg_time_knn:.5f} detik**")
+elif options == "Scatter Plot":
+    st.subheader("Hubungan Talent dan Infrastructure Berdasarkan Income Group")
 
-            cosine_recs = get_content_based_recommendations_with_scores(title, cosine_sim, df)
-            knn_recs = get_knn_recommendations_with_scores(title, knn_model, df, tfidf_matrix)
+    fig = px.scatter(
+        filtered_data, x='Talent', y='Infrastructure',
+        color='Income group', size='Total score', hover_data=['Country'],
+        title="Scatter Plot Talent vs Infrastructure",
+        labels={'Talent': 'Talent', 'Infrastructure': 'Infrastructure'}
+    )
+    st.plotly_chart(fig)
 
-            st.subheader(f"Rekomendasi berdasarkan Cosine Similarity untuk '{title}':")
-            for rec_title, score in cosine_recs:
-                st.write(f"- {rec_title} (similarity: {score:.4f})")
+elif options == "Peta Geografis":
+    st.subheader("Peta Geografis Total Score per Country")
+    
+    # Menambahkan filter untuk region
+    region_filter = st.multiselect("Pilih Region:", data['Region'].unique(), default=data['Region'].unique())
+    filtered_data = filtered_data[filtered_data['Region'].isin(region_filter)]
 
-            st.subheader(f"Rekomendasi berdasarkan KNN untuk '{title}':")
-            for rec_title, score in knn_recs:
-                st.write(f"- {rec_title} (similarity: {score:.4f})")
+    # Membuat peta choropleth
+    fig = px.choropleth(
+        filtered_data,
+        locations='Country',
+        locationmode='country names',
+        color='Total score',
+        hover_name='Country',
+        title='Total Score per Country',
+        color_continuous_scale=px.colors.sequential.Plasma
+    )
+    st.plotly_chart(fig)
+
+elif options == "Box Plot":
+    st.subheader("Box Plot Berdasarkan Cluster")
+    fig = px.box(
+        filtered_data, x='Cluster', y='Talent', color='Cluster', title="Box Plot Talent per Cluster",
+        labels={'Talent': 'Talent', 'Cluster': 'Cluster'}
+    )
+    st.plotly_chart(fig)
+
+    fig = px.box(
+        filtered_data, x='Cluster', y='Infrastructure', color='Cluster', title="Box Plot Infrastructure per Cluster",
+        labels={'Infrastructure': 'Infrastructure', 'Cluster': 'Cluster'}
+    )
+    st.plotly_chart(fig)
+
+elif options == "Pie Chart":
+    st.subheader("Pie Chart untuk Political Regime")
+    fig = px.pie(
+        filtered_data, names='Political regime', title='Distribusi Political Regime',
+        labels={'Political regime': 'Political Regime'}
+    )
+    st.plotly_chart(fig)
+
+elif options == "Bubble Chart":
+    st.subheader("Bubble Chart: Talent vs Infrastructure Berdasarkan Political Regime")
+
+    fig = px.scatter(
+        filtered_data, x='Talent', y='Infrastructure', size='Total score', color='Political regime',
+        hover_data=['Country'], title="Bubble Chart Talent vs Infrastructure by Political Regime",
+        labels={'Talent': 'Talent', 'Infrastructure': 'Infrastructure'}
+    )
+    st.plotly_chart(fig)
