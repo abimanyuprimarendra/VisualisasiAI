@@ -7,7 +7,7 @@ from sklearn.neighbors import NearestNeighbors
 
 @st.cache_data
 def load_data_from_drive():
-    csv_url = "https://drive.google.com/uc?id=1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB"
+    csv_url = "https://drive.google.com/file/d/1cjFVBpIv9SOoyWvSmg1FgReqmdXxaxB-/view"
     data = pd.read_csv(csv_url)
     data['listed_in'] = data['listed_in'].fillna('')
     if 'description' in data.columns:
